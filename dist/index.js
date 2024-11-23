@@ -163,6 +163,8 @@ let db;
 
 // JWT Verification Middleware
 const verifyJwtMiddleware = async (ctx, next) => {
+  ctx.state.user = "vlad";
+  return; // TODO revert
   const authHeader = ctx.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     ctx.response.status = 401;
@@ -294,10 +296,12 @@ router.get("/car", verifyJwtMiddleware, async ctx => {
 
 // Add a new car
 router.post("/car", verifyJwtMiddleware, async ctx => {
+  console.log("test log");
   const {
     brand,
     is_new
   } = ctx.request.body;
+  console.log("got request: ", brand);
   if (!brand) {
     ctx.response.status = 400;
     ctx.response.body = {
