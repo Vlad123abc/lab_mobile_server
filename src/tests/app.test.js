@@ -41,3 +41,38 @@ describe("GET /car/1", () => {
     expect(response.statusCode).toBe(200);
   });
 });
+
+describe("GET /car", () => {
+  it("should return one fucking car", async () => {
+    const response = await request(app)
+      .get("/car")
+      .set("Authorization", fucking_auth);
+      expect(response.statusCode).toBe(200);
+      car_list = response.body;
+      expect(car_list.length).toBe(1); 
+  });
+});
+
+// add a new car
+describe("POST /car", () => {
+  it("should return OK", async () => {
+    const newCar = { brand: "Ford", is_new: true };
+    const response = await request(app)
+      .post("/car")
+      .set("Authorization", fucking_auth)
+      .send(newCar);
+    expect(response.statusCode).toBe(201);
+  });
+});
+
+// now we have 2 cars omfg lol
+describe("GET /car", () => {
+  it("should return one fucking car", async () => {
+    const response = await request(app)
+      .get("/car")
+      .set("Authorization", fucking_auth);
+      expect(response.statusCode).toBe(200);
+      car_list = response.body;
+      expect(car_list.length).toBe(2); 
+  });
+});
