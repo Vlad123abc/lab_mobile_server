@@ -117,7 +117,20 @@ parcelRequire = (function (modules, cache, entry, globalName) {
   }
 
   return newRequire;
-})({"app.js":[function(require,module,exports) {
+})({"../config.js":[function(require,module,exports) {
+const config = {
+  development: {
+    connectionString: './development_db.sqlite'
+  },
+  test: {
+    connectionString: ':memory:'
+  },
+  production: {
+    connectionString: './production_db.sqlite'
+  }
+};
+module.exports = config;
+},{}],"app.js":[function(require,module,exports) {
 function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
 function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
 function _defineProperty(e, r, t) { return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
@@ -138,7 +151,13 @@ const sqlite3 = require("sqlite3").verbose();
 const {
   open
 } = require("sqlite");
+const config = require('../config'); // Adjust the path as necessary
 const SECRET = "shhhhh";
+const environment = process.env.NODE_ENV || 'development';
+const {
+  connectionString
+} = config[environment];
+console.log("conn string is:", connectionString);
 app.use(bodyparser());
 app.use(cors());
 
@@ -146,7 +165,7 @@ app.use(cors());
 let db;
 (async () => {
   db = await open({
-    filename: "./cars.db",
+    filename: connectionString,
     driver: sqlite3.Database
   });
 
@@ -163,8 +182,6 @@ let db;
 
 // JWT Verification Middleware
 const verifyJwtMiddleware = async (ctx, next) => {
-  ctx.state.user = "vlad";
-  return; // TODO revert
   const authHeader = ctx.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     ctx.response.status = 401;
@@ -296,12 +313,10 @@ router.get("/car", verifyJwtMiddleware, async ctx => {
 
 // Add a new car
 router.post("/car", verifyJwtMiddleware, async ctx => {
-  console.log("test log");
   const {
     brand,
     is_new
   } = ctx.request.body;
-  console.log("got request: ", brand);
   if (!brand) {
     ctx.response.status = 400;
     ctx.response.body = {
@@ -338,16 +353,19 @@ router.get("/car/:id", verifyJwtMiddleware, async ctx => {
   const {
     id
   } = ctx.params;
+  console.log("looking for car with id: ", id);
   try {
     const car = await db.get("SELECT * FROM cars WHERE id = ?", [id]);
     if (car) {
       ctx.response.body = car;
       ctx.response.status = 200;
+      console.log("found car: ", id);
     } else {
       ctx.response.status = 404;
       ctx.response.body = {
         message: `Car with id ${id} not found`
       };
+      console.log("no car: ", id);
     }
   } catch (err) {
     ctx.response.status = 500;
@@ -426,7 +444,7 @@ router.del("/car/:id", verifyJwtMiddleware, async ctx => {
 app.use(router.routes());
 app.use(router.allowedMethods());
 module.exports = server;
-},{}],"index.js":[function(require,module,exports) {
+},{"../config":"../config.js"}],"index.js":[function(require,module,exports) {
 const server = require("./app");
 server.listen(3000, () => {
   console.log("Server is running on http://localhost:3000");

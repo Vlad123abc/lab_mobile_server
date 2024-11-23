@@ -9,9 +9,11 @@ const bodyparser = require("koa-bodyparser");
 const jwt = require("jsonwebtoken");
 const sqlite3 = require("sqlite3").verbose();
 const { open } = require("sqlite");
-
+const config = require('../config'); // Adjust the path as necessary
 const SECRET = "shhhhh";
-
+const environment = process.env.NODE_ENV || 'development';
+const { connectionString } = config[environment];
+console.log("conn string is:", connectionString);
 app.use(bodyparser());
 app.use(cors());
 
@@ -19,10 +21,10 @@ app.use(cors());
 let db;
 (async () => {
   db = await open({
-    filename: "./cars.db",
+    filename: connectionString,
     driver: sqlite3.Database,
   });
-
+    
   // Create table if not exists
   await db.exec(`
     CREATE TABLE IF NOT EXISTS cars (
@@ -36,8 +38,6 @@ let db;
 
 // JWT Verification Middleware
 const verifyJwtMiddleware = async (ctx, next) => {
-    ctx.state.user = "vlad";
-    return; // TODO revert
   const authHeader = ctx.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     ctx.response.status = 401;
@@ -151,9 +151,7 @@ router.get("/car", verifyJwtMiddleware, async (ctx) => {
 
 // Add a new car
 router.post("/car", verifyJwtMiddleware, async (ctx) => {
-    console.log("test log");
     const { brand, is_new } = ctx.request.body;
-    console.log("got request: ", brand);
   if (!brand) {
     ctx.response.status = 400;
     ctx.response.body = { message: "Brand is required" };
@@ -178,16 +176,20 @@ router.post("/car", verifyJwtMiddleware, async (ctx) => {
 
 // Fetch a specific car
 router.get("/car/:id", verifyJwtMiddleware, async (ctx) => {
-    
-  const { id } = ctx.params;
+    const { id } = ctx.params;
+    console.log("looking for car with id: ", id);
+
   try {
     const car = await db.get("SELECT * FROM cars WHERE id = ?", [id]);
     if (car) {
       ctx.response.body = car;
-      ctx.response.status = 200;
+        ctx.response.status = 200;
+    console.log("found car: ", id);        
     } else {
       ctx.response.status = 404;
-      ctx.response.body = { message: `Car with id ${id} not found` };
+        ctx.response.body = { message: `Car with id ${id} not found` };
+        console.log("no car: ", id);        
+        
     }
   } catch (err) {
     ctx.response.status = 500;
