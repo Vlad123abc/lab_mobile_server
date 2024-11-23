@@ -9,9 +9,9 @@ const bodyparser = require("koa-bodyparser");
 const jwt = require("jsonwebtoken");
 const sqlite3 = require("sqlite3").verbose();
 const { open } = require("sqlite");
-const config = require('../config'); // Adjust the path as necessary
+const config = require("../config"); // Adjust the path as necessary
 const SECRET = "shhhhh";
-const environment = process.env.NODE_ENV || 'development';
+const environment = process.env.NODE_ENV || "development";
 const { connectionString } = config[environment];
 console.log("conn string is:", connectionString);
 app.use(bodyparser());
@@ -24,7 +24,7 @@ let db;
     filename: connectionString,
     driver: sqlite3.Database,
   });
-    
+
   // Create table if not exists
   await db.exec(`
     CREATE TABLE IF NOT EXISTS cars (
@@ -140,10 +140,26 @@ router.post("/login", async (ctx) => {
 // Fetch all cars
 router.get("/car", verifyJwtMiddleware, async (ctx) => {
   try {
-    const rows = await db.all("SELECT * FROM cars");
+    console.log("Query Parameters:", ctx.query); // Log query parameters
+    let page = 1;
+    let pageSize = 10;
+    if (ctx.query && ctx.query.page) {
+      page = parseInt(ctx.query.page, 10) || 1;
+    }
+    if (ctx.query && ctx.query.pageSize) {
+      pageSize = parseInt(ctx.query.pageSize, 10) || 10;
+    }
+    console.log("bloody pagesize is: ", pageSize);
+    const offset = (page - 1) * pageSize;
+    rows = await db.all("SELECT * FROM cars LIMIT ? OFFSET ?", [
+      pageSize,
+      offset,
+    ]);
     ctx.response.body = rows;
     ctx.response.status = 200;
   } catch (err) {
+    console.log("Err is: ", err);
+
     ctx.response.status = 500;
     ctx.response.body = { message: "Error fetching cars" };
   }
@@ -151,7 +167,7 @@ router.get("/car", verifyJwtMiddleware, async (ctx) => {
 
 // Add a new car
 router.post("/car", verifyJwtMiddleware, async (ctx) => {
-    const { brand, is_new } = ctx.request.body;
+  const { brand, is_new } = ctx.request.body;
   if (!brand) {
     ctx.response.status = 400;
     ctx.response.body = { message: "Brand is required" };
@@ -162,7 +178,7 @@ router.post("/car", verifyJwtMiddleware, async (ctx) => {
     const date = new Date().toISOString();
     const result = await db.run(
       "INSERT INTO cars (brand, date, is_new) VALUES (?, ?, ?)",
-      [brand, date, is_new ? 1 : 0]
+      [brand, date, is_new ? 1 : 0],
     );
     const newCar = { id: result.lastID, brand, date, is_new };
     ctx.response.body = newCar;
@@ -176,20 +192,19 @@ router.post("/car", verifyJwtMiddleware, async (ctx) => {
 
 // Fetch a specific car
 router.get("/car/:id", verifyJwtMiddleware, async (ctx) => {
-    const { id } = ctx.params;
-    console.log("looking for car with id: ", id);
+  const { id } = ctx.params;
+  console.log("looking for car with id: ", id);
 
   try {
     const car = await db.get("SELECT * FROM cars WHERE id = ?", [id]);
     if (car) {
       ctx.response.body = car;
-        ctx.response.status = 200;
-    console.log("found car: ", id);        
+      ctx.response.status = 200;
+      console.log("found car: ", id);
     } else {
       ctx.response.status = 404;
-        ctx.response.body = { message: `Car with id ${id} not found` };
-        console.log("no car: ", id);        
-        
+      ctx.response.body = { message: `Car with id ${id} not found` };
+      console.log("no car: ", id);
     }
   } catch (err) {
     ctx.response.status = 500;
@@ -216,10 +231,11 @@ router.put("/car/:id", verifyJwtMiddleware, async (ctx) => {
       is_new: is_new !== undefined ? (is_new ? 1 : 0) : car.is_new,
     };
 
-    await db.run(
-      "UPDATE cars SET brand = ?, is_new = ? WHERE id = ?",
-      [updatedCar.brand, updatedCar.is_new, id]
-    );
+    await db.run("UPDATE cars SET brand = ?, is_new = ? WHERE id = ?", [
+      updatedCar.brand,
+      updatedCar.is_new,
+      id,
+    ]);
 
     ctx.response.body = updatedCar;
     ctx.response.status = 200;

@@ -18,7 +18,7 @@ describe("GET /car/1", () => {
       .get("/car/1")
       .set("Authorization", fucking_auth);
     expect(response.statusCode).toBe(404);
-    expect(response.text).toBe( "{\"message\":\"Car with id 1 not found\"}");
+    expect(response.text).toBe('{"message":"Car with id 1 not found"}');
   });
 });
 
@@ -47,9 +47,9 @@ describe("GET /car", () => {
     const response = await request(app)
       .get("/car")
       .set("Authorization", fucking_auth);
-      expect(response.statusCode).toBe(200);
-      car_list = response.body;
-      expect(car_list.length).toBe(1); 
+    expect(response.statusCode).toBe(200);
+    car_list = response.body;
+    expect(car_list.length).toBe(1);
   });
 });
 
@@ -71,8 +71,43 @@ describe("GET /car", () => {
     const response = await request(app)
       .get("/car")
       .set("Authorization", fucking_auth);
-      expect(response.statusCode).toBe(200);
-      car_list = response.body;
-      expect(car_list.length).toBe(2); 
+    expect(response.statusCode).toBe(200);
+    car_list = response.body;
+    expect(car_list.length).toBe(2);
+  });
+});
+
+// now we have 1 cars omfg lol
+describe("GET /car", () => {
+  it("page 1 1 per page should return one fucking car: the first", async () => {
+    const page = 1;
+    const pageSize = 1;
+    const response = await request(app)
+      .get("/car")
+      .query({ page, pageSize })
+      .set("Authorization", fucking_auth);
+    expect(response.statusCode).toBe(200);
+    car_list = response.body;
+      expect(car_list.length).toBe(1);
+    expect(car_list[0].brand).toBe("Toyota");
+      
+  });
+});
+
+
+// now we have 1 cars omfg lol
+describe("GET /car", () => {
+  it("page 2 1 per page should return one fucking car: the second", async () => {
+    const page = 2;
+    const pageSize = 1;
+    const response = await request(app)
+      .get("/car")
+      .query({ page, pageSize })
+      .set("Authorization", fucking_auth);
+    expect(response.statusCode).toBe(200);
+    car_list = response.body;
+      expect(car_list.length).toBe(1);
+    expect(car_list[0].brand).toBe("Ford");
+      
   });
 });
