@@ -117,38 +117,61 @@ parcelRequire = (function (modules, cache, entry, globalName) {
   }
 
   return newRequire;
-})({"index.js":[function(require,module,exports) {
+})({"app.js":[function(require,module,exports) {
 function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
 function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
 function _defineProperty(e, r, t) { return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
 function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == typeof i ? i : i + ""; }
 function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != typeof i) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
-const Koa = require('koa');
+const Koa = require("koa");
 const app = new Koa();
-const server = require('http').createServer(app.callback());
-const WebSocket = require('ws');
+const server = require("http").createServer(app.callback());
+const WebSocket = require("ws");
 const wss = new WebSocket.Server({
   server
 });
-const Router = require('koa-router');
-const cors = require('koa-cors');
-const bodyparser = require('koa-bodyparser');
-const jwt = require('jsonwebtoken');
+const Router = require("koa-router");
+const cors = require("koa-cors");
+const bodyparser = require("koa-bodyparser");
+const jwt = require("jsonwebtoken");
+const sqlite3 = require("sqlite3").verbose();
+const {
+  open
+} = require("sqlite");
+const SECRET = "shhhhh";
 app.use(bodyparser());
 app.use(cors());
-const SECRET = 'shhhhh';
+
+// Initialize SQLite database
+let db;
+(async () => {
+  db = await open({
+    filename: "./cars.db",
+    driver: sqlite3.Database
+  });
+
+  // Create table if not exists
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS cars (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      brand TEXT NOT NULL,
+      date TEXT NOT NULL,
+      is_new INTEGER NOT NULL
+    )
+  `);
+})();
 
 // JWT Verification Middleware
 const verifyJwtMiddleware = async (ctx, next) => {
   const authHeader = ctx.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
     ctx.response.status = 401;
     ctx.response.body = {
-      message: 'Authorization token required'
+      message: "Authorization token required"
     };
     return;
   }
-  const token = authHeader.split(' ')[1];
+  const token = authHeader.split(" ")[1];
   try {
     const decoded = jwt.verify(token, SECRET);
     ctx.state.user = decoded.principal; // Store decoded user information in context
@@ -156,7 +179,7 @@ const verifyJwtMiddleware = async (ctx, next) => {
   } catch (err) {
     ctx.response.status = 403;
     ctx.response.body = {
-      message: 'Invalid or expired token'
+      message: "Invalid or expired token"
     };
   }
 };
@@ -167,74 +190,69 @@ app.use(async (ctx, next) => {
     await next();
   } catch (err) {
     ctx.response.body = {
-      message: err.message || 'Unexpected error'
+      message: err.message || "Unexpected error"
     };
     ctx.response.status = 500;
   }
 });
 
-// Classes for User and Car
-class Car {
-  constructor({
-    id,
-    brand,
-    date,
-    is_new
-  }) {
-    this.id = id;
-    this.brand = brand;
-    this.date = date;
-    this.is_new = is_new;
-  }
-}
-class User {
-  constructor(name, pass) {
-    this.name = name;
-    this.pass = pass;
-  }
-}
-const carsByUser = {}; // Object storing cars per user: { username: [Car, Car, ...] }
-const users = [new User("vlad", "1234"), new User("gigel", "1111")];
-let lastId = 0;
+// Users and JWT Token Utilities
+const users = [{
+  name: "vlad",
+  pass: "1234"
+}, {
+  name: "gigel",
+  pass: "1111"
+}];
+const checkLogin = user => users.some(u => u.name === user.name && u.pass === user.pass);
+const createJwt = name => jwt.sign({
+  principal: name
+}, SECRET);
 
 // Broadcasting Function
-const broadcast = data => wss.clients.forEach(client => {
-  if (client.readyState === WebSocket.OPEN) {
-    client.send(JSON.stringify(data));
-  }
-});
-const router = new Router();
-wss.once('message', data => {
-  console.log("Init message received");
-  const token = data.toString(); // Assume first message is the JWT token
-  const decoded = verifyJwt(token);
-  if (decoded && decoded.principal) {
-    username = decoded.principal;
-
-    // If the user already has connections, add this WebSocket to the existing array
-    if (!clients.has(username)) {
-      clients.set(username, []);
+const clients = new Map();
+const broadcast = data => {
+  clients.forEach((client, key) => {
+    if (data.user && data.user === key) {
+      client.forEach(oneClient => {
+        oneClient.send(JSON.stringify(data));
+      });
     }
-    clients.get(username).push(ws); // Store the WebSocket connection in the array
-    console.log(`Client authenticated: ${username}`);
-  }
-});
-wss.on('close', () => {
-  console.log(`Client disconnected: ${username}`);
-  // Remove this WebSocket from the client's list of connections
-  const userConnections = clients.get(username);
-  const index = userConnections.indexOf(ws);
-  if (index !== -1) {
-    userConnections.splice(index, 1);
-    if (userConnections.length === 0) {
-      clients.delete(username); // Remove the user from the map if no connections left
-    }
-  }
-});
-const checkLogin = user => {
-  return users.some(u => u.name === user.name && u.pass === user.pass);
+  });
 };
-router.post('/login', async ctx => {
+wss.on("connection", (ws, req) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const username1 = url.searchParams.get("username");
+  ws.once("message", data => {
+    const token = data.toString();
+    const decoded = jwt.verify(token, SECRET);
+    if (decoded && decoded.principal) {
+      const username = decoded.principal;
+      if (!clients.has(username)) {
+        clients.set(username, []);
+      }
+      clients.get(username).push(ws);
+    }
+  });
+  ws.on("close", () => {
+    const userConnections = clients.get(username1);
+    if (userConnections) {
+      const index = userConnections.indexOf(ws);
+      if (index !== -1) {
+        userConnections.splice(index, 1);
+        if (userConnections.length === 0) {
+          clients.delete(username1);
+        }
+      }
+    }
+  });
+});
+
+// Routes
+const router = new Router();
+
+// Login Route
+router.post("/login", async ctx => {
   const {
     name,
     pass
@@ -244,7 +262,10 @@ router.post('/login', async ctx => {
     ctx.response.body = {
       message: "Name and password are required"
     };
-  } else if (checkLogin(new User(name, pass))) {
+  } else if (checkLogin({
+    name,
+    pass
+  })) {
     ctx.response.status = 200;
     ctx.response.body = {
       token: createJwt(name)
@@ -256,120 +277,155 @@ router.post('/login', async ctx => {
     };
   }
 });
-const createJwt = name => {
-  return jwt.sign({
-    principal: name
-  }, SECRET);
-};
 
-// Routes
-
-// Fetch all cars for the authenticated user
-router.get('/car', verifyJwtMiddleware, ctx => {
-  const user = ctx.state.user;
-  ctx.response.body = carsByUser[user] || []; // Return an empty array if no cars
-  ctx.response.status = 200;
-});
-const createItem = async ctx => {
-  const item = ctx.request.body;
-  if (!item.brand) {
-    ctx.response.body = {
-      message: 'Brand is missing'
-    };
-    ctx.response.status = 400;
-    return;
-  }
-  const user = ctx.state.user;
-  item.id = `${++lastId}`;
-  item.date = new Date();
-
-  // Initialize the array if it doesn't exist for the user
-  if (!carsByUser[user]) {
-    carsByUser[user] = [];
-  }
-  carsByUser[user].push(item); // Add car to the user's list
-  ctx.response.body = item;
-  ctx.response.status = 201;
-  console.log("Car addeed");
-  broadcast({
-    event: 'created',
-    payload: {
-      item
-    }
-  });
-};
-router.post('/car', verifyJwtMiddleware, async ctx => {
-  await createItem(ctx);
-});
-
-// Fetch a specific car for the authenticated user
-router.get('/car/:id', verifyJwtMiddleware, async ctx => {
-  const user = ctx.state.user;
-  const carId = ctx.params.id;
-  const car = (carsByUser[user] || []).find(car => car.id === carId);
-  if (car) {
-    ctx.response.body = car;
+// Fetch all cars
+router.get("/car", verifyJwtMiddleware, async ctx => {
+  try {
+    const rows = await db.all("SELECT * FROM cars");
+    ctx.response.body = rows;
     ctx.response.status = 200;
-  } else {
+  } catch (err) {
+    ctx.response.status = 500;
     ctx.response.body = {
-      message: `Car with id ${carId} not found`
+      message: "Error fetching cars"
     };
-    ctx.response.status = 404;
   }
 });
 
-// Update a car for the authenticated user
-router.put('/car/:id', verifyJwtMiddleware, async ctx => {
-  const user = ctx.state.user;
-  const id = ctx.params.id;
-  const item = ctx.request.body;
-  const cars = carsByUser[user] || [];
-  const index = cars.findIndex(car => car.id === id);
-  if (index === -1) {
+// Add a new car
+router.post("/car", verifyJwtMiddleware, async ctx => {
+  const {
+    brand,
+    is_new
+  } = ctx.request.body;
+  if (!brand) {
+    ctx.response.status = 400;
     ctx.response.body = {
-      message: `Car with id ${id} not found`
+      message: "Brand is required"
     };
-    ctx.response.status = 404;
     return;
   }
-  cars[index] = _objectSpread(_objectSpread({}, cars[index]), item);
-  ctx.response.body = cars[index];
-  ctx.response.status = 200;
-  broadcast({
-    event: 'updated',
-    payload: {
-      item
-    }
-  });
+  try {
+    const date = new Date().toISOString();
+    const result = await db.run("INSERT INTO cars (brand, date, is_new) VALUES (?, ?, ?)", [brand, date, is_new ? 1 : 0]);
+    const newCar = {
+      id: result.lastID,
+      brand,
+      date,
+      is_new
+    };
+    ctx.response.body = newCar;
+    ctx.response.status = 201;
+    broadcast({
+      event: "created",
+      user: ctx.state.user,
+      payload: newCar
+    });
+  } catch (err) {
+    ctx.response.status = 500;
+    ctx.response.body = {
+      message: "Error adding car"
+    };
+  }
 });
 
-// Delete a car for the authenticated user
-router.del('/car/:id', verifyJwtMiddleware, ctx => {
-  const user = ctx.state.user;
-  const id = ctx.params.id;
-  const cars = carsByUser[user] || [];
-  const index = cars.findIndex(car => car.id === id);
-  if (index !== -1) {
-    const item = cars[index];
-    cars.splice(index, 1);
-    broadcast({
-      event: 'deleted',
-      payload: {
-        item
-      }
-    });
-    ctx.response.status = 204;
-  } else {
+// Fetch a specific car
+router.get("/car/:id", verifyJwtMiddleware, async ctx => {
+  const {
+    id
+  } = ctx.params;
+  try {
+    const car = await db.get("SELECT * FROM cars WHERE id = ?", [id]);
+    if (car) {
+      ctx.response.body = car;
+      ctx.response.status = 200;
+    } else {
+      ctx.response.status = 404;
+      ctx.response.body = {
+        message: `Car with id ${id} not found`
+      };
+    }
+  } catch (err) {
+    ctx.response.status = 500;
     ctx.response.body = {
-      message: `Car with id ${id} not found`
+      message: "Error fetching car"
     };
-    ctx.response.status = 404;
+  }
+});
+
+// Update a car
+router.put("/car/:id", verifyJwtMiddleware, async ctx => {
+  const {
+    id
+  } = ctx.params;
+  const {
+    brand,
+    is_new
+  } = ctx.request.body;
+  try {
+    const car = await db.get("SELECT * FROM cars WHERE id = ?", [id]);
+    if (!car) {
+      ctx.response.status = 404;
+      ctx.response.body = {
+        message: `Car with id ${id} not found`
+      };
+      return;
+    }
+    const updatedCar = _objectSpread(_objectSpread({}, car), {}, {
+      brand: brand || car.brand,
+      is_new: is_new !== undefined ? is_new ? 1 : 0 : car.is_new
+    });
+    await db.run("UPDATE cars SET brand = ?, is_new = ? WHERE id = ?", [updatedCar.brand, updatedCar.is_new, id]);
+    ctx.response.body = updatedCar;
+    ctx.response.status = 200;
+    broadcast({
+      event: "updated",
+      user: ctx.state.user,
+      payload: updatedCar
+    });
+  } catch (err) {
+    ctx.response.status = 500;
+    ctx.response.body = {
+      message: "Error updating car"
+    };
+  }
+});
+
+// Delete a car
+router.del("/car/:id", verifyJwtMiddleware, async ctx => {
+  const {
+    id
+  } = ctx.params;
+  try {
+    const car = await db.get("SELECT * FROM cars WHERE id = ?", [id]);
+    if (!car) {
+      ctx.response.status = 404;
+      ctx.response.body = {
+        message: `Car with id ${id} not found`
+      };
+      return;
+    }
+    await db.run("DELETE FROM cars WHERE id = ?", [id]);
+    ctx.response.status = 204;
+    broadcast({
+      event: "deleted",
+      user: ctx.state.user,
+      payload: car
+    });
+  } catch (err) {
+    ctx.response.status = 500;
+    ctx.response.body = {
+      message: "Error deleting car"
+    };
   }
 });
 app.use(router.routes());
 app.use(router.allowedMethods());
+module.exports = server;
+},{}],"index.js":[function(require,module,exports) {
+const server = require("./app");
 server.listen(3000, () => {
-  console.log('Server is running on http://localhost:3000');
+  console.log("Server is running on http://localhost:3000");
 });
-},{}]},{},["index.js"], null)
+},{"./app":"app.js"}]},{},["index.js"], null)
 //# sourceMappingURL=/index.js.map

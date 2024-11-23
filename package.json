@@ -8,7 +8,8 @@
     "dev:hot-reload": "node ./node_modules/nodemon/bin/nodemon --watch ./dist/ ./dist/index.js",
     "start": "node ./node_modules/npm-run-all/bin/npm-run-all -p -r dev:watch dev:hot-reload",
     "build": "node ./node_modules/parcel-bundler/bin/cli build ./src/index.js --target node --out-dir ./dist/",
-    "lint": "node ./node_modules/eslint/bin/eslint . --ext .js --fix"
+    "lint": "node ./node_modules/eslint/bin/eslint . --ext .js --fix",
+    "test": "jest"
   },
   "repository": {
     "type": "git",
@@ -19,6 +20,7 @@
   "license": "MIT",
   "dependencies": {
     "express": "^4.21.1",
+    "jest": "^29.7.0",
     "jsonwebtoken": "^9.0.2",
     "koa": "^2.15.3",
     "koa-bodyparser": "^4.4.1",
@@ -26,6 +28,7 @@
     "koa-router": "^13.0.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
+    "supertest": "^7.0.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
