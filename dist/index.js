@@ -151,9 +151,9 @@ const sqlite3 = require("sqlite3").verbose();
 const {
   open
 } = require("sqlite");
-const config = require('../config'); // Adjust the path as necessary
+const config = require("../config"); // Adjust the path as necessary
 const SECRET = "shhhhh";
-const environment = process.env.NODE_ENV || 'development';
+const environment = process.env.NODE_ENV || "development";
 const {
   connectionString
 } = config[environment];
@@ -175,7 +175,10 @@ let db;
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       brand TEXT NOT NULL,
       date TEXT NOT NULL,
-      is_new INTEGER NOT NULL
+      is_new INTEGER NOT NULL,
+      car_image TEXT,
+      latidude INTEGER,
+      longitude INTEGER
     )
   `);
 })();
@@ -300,10 +303,23 @@ router.post("/login", async ctx => {
 // Fetch all cars
 router.get("/car", verifyJwtMiddleware, async ctx => {
   try {
-    const rows = await db.all("SELECT * FROM cars");
+    console.log("Query Parameters:", ctx.query); // Log query parameters
+    let page = 1;
+    let pageSize = 10;
+    if (ctx.query && ctx.query.page) {
+      page = parseInt(ctx.query.page, 10) || 1;
+    }
+    if (ctx.query && ctx.query.pageSize) {
+      pageSize = parseInt(ctx.query.pageSize, 10) || 10;
+    }
+    console.log("bloody pagesize is: ", pageSize);
+    const offset = (page - 1) * pageSize;
+    rows = await db.all("SELECT * FROM cars LIMIT ? OFFSET ?", [pageSize, offset]);
     ctx.response.body = rows;
     ctx.response.status = 200;
+    console.log("sending back rows:", rows);
   } catch (err) {
+    console.log("Err is: ", err);
     ctx.response.status = 500;
     ctx.response.body = {
       message: "Error fetching cars"
@@ -315,8 +331,10 @@ router.get("/car", verifyJwtMiddleware, async ctx => {
 router.post("/car", verifyJwtMiddleware, async ctx => {
   const {
     brand,
-    is_new
+    is_new,
+    car_image
   } = ctx.request.body;
+  console.log("received new post request:", ctx.request.body);
   if (!brand) {
     ctx.response.status = 400;
     ctx.response.body = {
@@ -326,12 +344,13 @@ router.post("/car", verifyJwtMiddleware, async ctx => {
   }
   try {
     const date = new Date().toISOString();
-    const result = await db.run("INSERT INTO cars (brand, date, is_new) VALUES (?, ?, ?)", [brand, date, is_new ? 1 : 0]);
+    const result = await db.run("INSERT INTO cars (brand, date, is_new, car_image) VALUES (?, ?, ?, ?)", [brand, date, is_new ? 1 : 0, car_image]);
     const newCar = {
       id: result.lastID,
       brand,
       date,
-      is_new
+      is_new,
+      car_image
     };
     ctx.response.body = newCar;
     ctx.response.status = 201;
@@ -382,8 +401,10 @@ router.put("/car/:id", verifyJwtMiddleware, async ctx => {
   } = ctx.params;
   const {
     brand,
-    is_new
+    is_new,
+    car_image
   } = ctx.request.body;
+  console.log("received change request for id:", id, "brand:", brand, ", car_image:", car_image.length, ", content: ", car_image);
   try {
     const car = await db.get("SELECT * FROM cars WHERE id = ?", [id]);
     if (!car) {
@@ -395,9 +416,10 @@ router.put("/car/:id", verifyJwtMiddleware, async ctx => {
     }
     const updatedCar = _objectSpread(_objectSpread({}, car), {}, {
       brand: brand || car.brand,
-      is_new: is_new !== undefined ? is_new ? 1 : 0 : car.is_new
+      is_new: is_new !== undefined ? is_new ? 1 : 0 : car.is_new,
+      car_image: car_image
     });
-    await db.run("UPDATE cars SET brand = ?, is_new = ? WHERE id = ?", [updatedCar.brand, updatedCar.is_new, id]);
+    await db.run("UPDATE cars SET brand = ?, is_new = ?, car_image = ? WHERE id = ?", [updatedCar.brand, updatedCar.is_new, updatedCar.car_image, id]);
     ctx.response.body = updatedCar;
     ctx.response.status = 200;
     broadcast({

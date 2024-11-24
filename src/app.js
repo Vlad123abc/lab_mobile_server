@@ -31,7 +31,10 @@ let db;
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       brand TEXT NOT NULL,
       date TEXT NOT NULL,
-      is_new INTEGER NOT NULL
+      is_new INTEGER NOT NULL,
+      car_image TEXT,
+      latidude INTEGER,
+      longitude INTEGER
     )
   `);
 })();
@@ -157,6 +160,7 @@ router.get("/car", verifyJwtMiddleware, async (ctx) => {
     ]);
     ctx.response.body = rows;
     ctx.response.status = 200;
+    console.log("sending back rows:", rows);
   } catch (err) {
     console.log("Err is: ", err);
 
@@ -167,7 +171,8 @@ router.get("/car", verifyJwtMiddleware, async (ctx) => {
 
 // Add a new car
 router.post("/car", verifyJwtMiddleware, async (ctx) => {
-  const { brand, is_new } = ctx.request.body;
+  const { brand, is_new, car_image } = ctx.request.body;
+  console.log("received new post request:", ctx.request.body);
   if (!brand) {
     ctx.response.status = 400;
     ctx.response.body = { message: "Brand is required" };
@@ -177,10 +182,10 @@ router.post("/car", verifyJwtMiddleware, async (ctx) => {
   try {
     const date = new Date().toISOString();
     const result = await db.run(
-      "INSERT INTO cars (brand, date, is_new) VALUES (?, ?, ?)",
-      [brand, date, is_new ? 1 : 0],
+      "INSERT INTO cars (brand, date, is_new, car_image) VALUES (?, ?, ?, ?)",
+      [brand, date, is_new ? 1 : 0, car_image],
     );
-    const newCar = { id: result.lastID, brand, date, is_new };
+    const newCar = { id: result.lastID, brand, date, is_new, car_image };
     ctx.response.body = newCar;
     ctx.response.status = 201;
     broadcast({ event: "created", user: ctx.state.user, payload: newCar });
@@ -215,8 +220,17 @@ router.get("/car/:id", verifyJwtMiddleware, async (ctx) => {
 // Update a car
 router.put("/car/:id", verifyJwtMiddleware, async (ctx) => {
   const { id } = ctx.params;
-  const { brand, is_new } = ctx.request.body;
-
+  const { brand, is_new, car_image } = ctx.request.body;
+  console.log(
+    "received change request for id:",
+    id,
+    "brand:",
+    brand,
+    ", car_image:",
+    car_image.length,
+    ", content: ",
+    car_image,
+  );
   try {
     const car = await db.get("SELECT * FROM cars WHERE id = ?", [id]);
     if (!car) {
@@ -229,13 +243,13 @@ router.put("/car/:id", verifyJwtMiddleware, async (ctx) => {
       ...car,
       brand: brand || car.brand,
       is_new: is_new !== undefined ? (is_new ? 1 : 0) : car.is_new,
+      car_image: car_image,
     };
 
-    await db.run("UPDATE cars SET brand = ?, is_new = ? WHERE id = ?", [
-      updatedCar.brand,
-      updatedCar.is_new,
-      id,
-    ]);
+    await db.run(
+      "UPDATE cars SET brand = ?, is_new = ?, car_image = ? WHERE id = ?",
+      [updatedCar.brand, updatedCar.is_new, updatedCar.car_image, id],
+    );
 
     ctx.response.body = updatedCar;
     ctx.response.status = 200;
